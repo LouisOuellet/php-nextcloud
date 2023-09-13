@@ -1,0 +1,22 @@
+{
+    "name": "laswitchtech/php-nextcloud",
+    "description": "A Nextcloud Library for PHP projects",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Louis Ouellet",
+            "email": "louis_ouellet@hotmail.com"
+        }
+    ],
+    "minimum-stability": "stable",
+    "require": {
+        "laswitchtech/php-logger": "^1.0",
+        "laswitchtech/php-configurator": "^1.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "LaswitchTech\\phpNextcloud\\": "src/"
+        }
+    }
+}
