@@ -71,9 +71,6 @@ class Base {
             // Check if data is provided to determine if we are setting or getting
             if($data){
 
-                // Sanitize $data by converting to string
-                $data = json_encode($data, JSON_UNESCAPED_SLASHES);
-
                 // Set Tim to Live (TTL)
                 $ttl = 3600;  // 1 hour
 
@@ -86,7 +83,7 @@ class Base {
 
             // Check if key exists and is not expired
             if (isset($this->Cache[$key]) && $this->Cache[$key]['expires'] > time()) {
-                return json_decode($this->Cache[$key]['data'],true);
+                return $this->Cache[$key]['data'];
             }
 
             return false;

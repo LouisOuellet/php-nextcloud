@@ -14,6 +14,21 @@ class File extends Base {
 	protected $Type = 'files'; // Request Type
 
 	/**
+	 * Get Cache.
+	 *
+	 * @return void
+	 * @throws Exception
+	 */
+	public function getCache(){
+		try {
+			return $this->Cache;
+		} catch (Exception $e) {
+			$this->Logger->error(__METHOD__ . ' Error: '.$e->getMessage());
+			return null;
+		}
+	}
+
+	/**
 	 * Upload a file.
 	 *
 	 * @param  string  $fileName
@@ -221,7 +236,7 @@ class File extends Base {
             // Debug Information
             $this->Logger->debug(__METHOD__ . ' Properties: ' . json_encode($Properties, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 
-			return isset($Properties['data']['d:quota-used-bytes'])||isset($Properties['data']['d:quota-available-bytes']);
+			return isset($Properties['d:quota-used-bytes'])||isset($Properties['d:quota-available-bytes']);
 		} catch (Exception $e) {
 			$this->Logger->error(__METHOD__ . ' Error: '.$e->getMessage());
 			return ['success' => false, 'error' => $e->getMessage()];
@@ -408,6 +423,74 @@ class File extends Base {
     }
 
     /**
+     * Fetch the file content based on the file path.
+     *
+     * @param  string $filePath
+     * @param  bool $encoded
+     * @return void
+     * @throws Exception
+     */
+    public function getFileContentByPath($filePath, $encoded = false) {
+        try {
+
+            // Debug Information
+            $this->Logger->debug(__METHOD__ . ' filePath: ' . json_encode($filePath, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+            $this->Logger->debug(__METHOD__ . ' encoded: ' . json_encode($encoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    
+            // Create cache key for this specific method and share token
+            $cacheKey = md5('getShagetFileContentByPathreProperties' . $filePath . $encoded);
+    
+            // Debug Information
+            $this->Logger->debug(__METHOD__ . ' cacheKey: ' . json_encode($cacheKey, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    
+            // Attempt to get cached data
+            $cachedData = $this->cache($cacheKey);
+            if ($cachedData !== false) {
+                return $cachedData;
+            }
+
+            // Correctly encode each segment of the file path
+            $filePathSegments = explode('/', $filePath);
+            $encodedPathSegments = array_map('urlencode', $filePathSegments);
+            $encodedFilePath = implode('/', $encodedPathSegments);
+
+            // Use the request method to get the file content
+            $headers = ['OCS-APIRequest: true'];
+            $response = $this->request('GET', $encodedFilePath, [
+                'headers' => $headers,
+                'type' => 'dav',  // Since we're working with files, the type is 'dav'
+            ]);
+
+            // Check if the request was successful
+            if (!$response['success'] || strpos($response['response'], 'Sabre\DAV\Exception\NotFound') !== false) {
+                throw new Exception('File not found or request was unsuccessful.');
+            }
+
+            $response = $response['response'];
+
+            if ($encoded) {
+                // Get the MIME type
+                $pathProperties = $this->getFileProperties($filePath);
+                if (isset($pathProperties['d:getcontenttype'])) {
+                    $mimeType = $pathProperties['d:getcontenttype'];
+                } else {
+                    throw new Exception('Could not retrieve MIME type');
+                }
+
+                $response = 'data:' . $mimeType . ';base64,' . base64_encode($response);
+            }
+
+            // Update the cache with the newly fetched content
+            $this->cache($cacheKey, $response);
+
+            return $response;
+        } catch (Exception $e) {
+            $this->Logger->error(__METHOD__ . ' Error: ' . $e->getMessage());
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
      * Fetch the file content based on the share token.
      *
      * @param  string $shareToken
@@ -447,10 +530,138 @@ class File extends Base {
                     throw new Exception('Could not retrieve MIME type');
                 }
 
-                return 'data:' . $mimeType . ';base64,' . base64_encode($response);
+                $response = 'data:' . $mimeType . ';base64,' . base64_encode($response);
             }
 
+            // Update the cache with the newly fetched content
+            $this->cache($cacheKey, $response);
+
             return $response;
+        } catch (Exception $e) {
+            $this->Logger->error(__METHOD__ . ' Error: ' . $e->getMessage());
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Create a Directory.
+     *
+     * @param  string $directoryPath
+     * @return array
+     * @throws Exception
+     */
+    public function makeDirectory($directoryPath){
+        try {
+
+            // Use the request method to make the MKCOL request
+            $response = $this->request('MKCOL', $directoryPath, [
+                'headers' => [
+                    'OCS-APIRequest: true',
+                ],
+                'type' => 'dav',
+                'cache' => false
+            ]);
+
+            // Parse the XML response
+            $response['response'] = $this->parse($response['response']);
+
+            // Check the response
+            if ($response['success']) {
+                return $response;
+            } else {
+                // If the response code is anything other than 201, throw an exception with the HTTP status code
+                throw new Exception($response['response']['data']['s:message']);
+            }
+        } catch (Exception $e) {
+            $this->Logger->error(__METHOD__ . ' Error: '.$e->getMessage());
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Get the list of files.
+     *
+     * @param  string $filePath
+     * @return void
+     * @throws Exception
+     */
+    public function getFiles($filePath) {
+        try {
+
+            // Debug Information
+            $this->Logger->debug(__METHOD__ . ' filePath: ' . json_encode($filePath, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+
+            // Check if file content is in Cache
+            $cacheKey = md5('getFiles' . $filePath);
+            $cachedData = $this->cache($cacheKey);
+            if ($cachedData !== false) {
+                return $cachedData;
+            }
+
+            // Check if $filePath is a directory
+            if (!$this->isDirectory($filePath)) {
+                throw new Exception('Path is not a directory');
+            }
+
+            // Set headers for the PROPFIND request
+            $headers = [
+                'Depth: 1',
+                'Content-Type: application/xml',
+                'OCS-APIRequest: true'
+            ];
+
+            // Use the new request method to fetch files
+            $response = $this->request('PROPFIND', $filePath, [
+                'headers' => $headers,
+                'type' => 'dav'
+            ]);
+
+            if (!$response['success']) {
+                throw new Exception('HTTP error ' . $response['http_code']);
+            }
+
+            // Use the new parse method to parse the XML response
+            $parsedData = $this->parse($response['response']);
+            if (!$parsedData['success']) {
+                throw new Exception('Failed to parse XML response');
+            }
+
+            $xmlArray = $parsedData['data'];
+
+            $responseArray = [];
+            foreach ($xmlArray['d:response'] as $entry) {
+                $tempArray = [];
+
+                $tempArray['href'] = $entry['d:href'];
+
+                // Extract filename from the href
+                $pathParts = explode('/', $tempArray['href']);
+                $tempArray['filename'] = urldecode(array_pop($pathParts));
+
+                // Add the file path
+                if($tempArray['filename']){
+                    $tempArray['path'] = trim($filePath . '/' . $tempArray['filename'], '/');
+                } else {
+                    $tempArray['path'] = trim(str_replace('/remote.php/dav/files/' . urlencode($this->Username) . '/', '', $tempArray['href']),'/');
+                }
+
+                // Skip the current file path
+                if ($filePath == $tempArray['path']) {
+                    continue;
+                }
+
+                // Extract the file properties
+                foreach ($entry['d:propstat']['d:prop'] as $propName => $propValue) {
+                    $tempArray[$propName] = $propValue;
+                }
+
+                $responseArray[] = $tempArray;
+            }
+
+            // Update the cache with the newly fetched content
+            $this->cache($cacheKey, $responseArray);
+
+            return $responseArray;
         } catch (Exception $e) {
             $this->Logger->error(__METHOD__ . ' Error: ' . $e->getMessage());
             return ['success' => false, 'error' => $e->getMessage()];
