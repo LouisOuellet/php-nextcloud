@@ -91,10 +91,30 @@ $getDirectoryProperties = $phpNextcloud->File->getFileProperties('uploads');
 $isDirectory = $phpNextcloud->File->isDirectory('uploads');
 // echo PHP_EOL . "Is it a Directory: " . PHP_EOL . json_encode($isDirectory, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);exit;
 
-// // Delete a Directory
-// // Delete a File
-// // Delete a Share
+// Copy
+if(isset($getFileProperties,$getFileProperties['path'],$getFileProperties['filename'])){
+    $copy = $phpNextcloud->File->copy($getFileProperties['path'],'uploads/client/'.$getFileProperties['filename']);
+    // echo PHP_EOL . "Copy: " . PHP_EOL . json_encode($copy, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);exit;
+}
 
-// Output Cache
-$cache = $phpNextcloud->File->getCache();
-echo PHP_EOL . "Cache: " . PHP_EOL . json_encode($cache, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);exit;
+// Move
+if(isset($getFileProperties,$getFileProperties['path'],$getFileProperties['filename'])){
+    $move = $phpNextcloud->File->move('uploads/client/'.$getFileProperties['filename'],'uploads/client/'.md5($getFileProperties['filename']));
+    // echo PHP_EOL . "Move: " . PHP_EOL . json_encode($move, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);exit;
+}
+
+// Unshare
+if(isset($share,$share['token'])){
+    $unshare = $phpNextcloud->File->unshare($share['token']);
+    // echo PHP_EOL . "Unshare: " . PHP_EOL . json_encode($unshare, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);exit;
+}
+
+// Delete
+if(isset($upload,$upload['path'])){
+    $deleteFile = $phpNextcloud->File->delete($upload['path']);
+    // echo PHP_EOL . "Delete File: " . PHP_EOL . json_encode($deleteFile, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);exit;
+    $deleteDirectory = $phpNextcloud->File->delete('uploads/client');
+    // echo PHP_EOL . "Delete a Directory: " . PHP_EOL . json_encode($deleteDirectory, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);exit;
+}
+
+echo PHP_EOL . "Done!" . PHP_EOL;

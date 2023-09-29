@@ -14,21 +14,6 @@ class File extends Base {
 	protected $Type = 'files'; // Request Type
 
 	/**
-	 * Get Cache.
-	 *
-	 * @return void
-	 * @throws Exception
-	 */
-	public function getCache(){
-		try {
-			return $this->Cache;
-		} catch (Exception $e) {
-			$this->Logger->error(__METHOD__ . ' Error: '.$e->getMessage());
-			return null;
-		}
-	}
-
-	/**
 	 * Upload a file.
 	 *
 	 * @param  string  $fileName
@@ -194,12 +179,10 @@ class File extends Base {
             // Set baseURL
             $baseURL = trim('/remote.php/dav/files/' . urlencode($this->Username) . '/', '/');
             $href = trim($baseURL . '/' . $filePath,'/');
-
-            // Since the XML is successfully parsed, extract the file properties
+    
+            $xmlArray = [];
             if($this->isAssociativeArray($parsedXml['data']['d:response'])){
                 foreach($parsedXml['data']['d:response'] as $response){
-
-                    // Since the XML is successfully parsed, extract the file properties
                     if(trim($response['d:href'],'/') == $href){
                         $xmlArray = $response['d:propstat']['d:prop'];
                         break;
@@ -208,12 +191,21 @@ class File extends Base {
             } else {
                 $xmlArray = $parsedXml['data']['d:response']['d:propstat']['d:prop'];
             }
+    
+            // Extracting filename and path
+            $pathInfo = pathinfo($filePath);
+            $filename = $pathInfo['basename'];
+            $path = $pathInfo['dirname'] === '.' ? '' : $pathInfo['dirname'];
+    
+            $xmlArray['href'] = $href;
+            $xmlArray['filename'] = $filename;
+            $xmlArray['path'] = $path . '/' . $filename;
 
             // Cache and return the parsed data
             $this->cache($cacheKey, $xmlArray);
 
             // Optionally: you can refine the data further if needed, for now, we return as is.
-            return ['success' => true, 'data' => $xmlArray];
+            return $xmlArray;
 
         } catch (Exception $e) {
             $this->Logger->error(__METHOD__ . ' Error: ' . $e->getMessage());
@@ -665,6 +657,165 @@ class File extends Base {
         } catch (Exception $e) {
             $this->Logger->error(__METHOD__ . ' Error: ' . $e->getMessage());
             return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Delete a file/path.
+     *
+     * @param  string  $filePath  The path to the file on Nextcloud.
+     * @return array
+     */
+    public function delete($filePath) {
+        try {
+            // Send a DELETE request
+            $response = $this->request('DELETE', $filePath);
+
+            // Check the response
+            if (!$response['success']) {
+                throw new Exception("Failed to delete the file. Response: " . $response['response']);
+            }
+
+            return [
+                'success' => true,
+                'message' => 'File deleted successfully.',
+            ];
+        } catch (Exception $e) {
+            $this->Logger->error(__METHOD__ . ' Error: ' . $e->getMessage());
+            return [
+                'success' => false,
+                'error' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Unshare (delete) a shared item based on its token.
+     *
+     * @param  string  $shareToken
+     * @return array
+     * @throws Exception
+     */
+    public function unshare($shareToken) {
+        try {
+            if (empty($shareToken)) {
+                throw new Exception("Share token is required.");
+            }
+
+            // Get the share properties
+            $properties = $this->getShareProperties($shareToken);
+
+            // The endpoint for public shares using the OCS API
+            // Assuming that $shareToken is the unique token for the shared item.
+            $endpoint = "apps/files_sharing/api/v1/shares/" . $properties['id'];
+
+            // Perform the DELETE request
+            $response = $this->request('DELETE', $endpoint, [
+                'type' => 'ocs',
+                'version' => 'v1',
+                'cache' => false,
+                'headers' => ['OCS-APIRequest: true']
+            ]);
+
+            if (!$response['success']) {
+                throw new Exception("Failed to unshare. Response: {$response['response']}");
+            }
+
+            return [
+                'success' => true,
+                'message' => "Successfully unshared the item."
+            ];
+        } catch (Exception $e) {
+            $this->Logger->error(__METHOD__ . ' Error: ' . $e->getMessage());
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Copy a file or directory from one path to another.
+     *
+     * @param string $sourcePath The path of the source file or directory.
+     * @param string $destinationPath The path to copy the source to.
+     * @return array The result of the operation.
+     */
+    public function copy($sourcePath, $destinationPath){
+        try {
+            // Construct the destination URL
+            $destinationUrl = rtrim($this->URL, '/') . '/remote.php/dav/files/' . urlencode($this->Username) . '/' . ltrim($destinationPath, '/');
+
+            // Use the 'request' method to send a COPY request
+            $options = [
+                'headers' => [
+                    'Destination: ' . $destinationUrl
+                ]
+            ];
+            $response = $this->request('COPY', $sourcePath, $options);
+
+            // Check for a successful response
+            if ($response['success']) {
+                return [
+                    'success' => true,
+                    'message' => 'Resource copied successfully.'
+                ];
+            } else {
+                return [
+                    'success' => false,
+                    'message' => 'Failed to copy resource. HTTP Code: ' . $response['http_code']
+                ];
+            }
+        } catch (Exception $e) {
+            $this->Logger->error(__METHOD__ . ' Error: ' . $e->getMessage());
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Move a file or folder from one path to another.
+     *
+     * @param  string  $sourcePath      The path of the file/folder you want to move.
+     * @param  string  $destinationPath The path where you want to move the file/folder to.
+     * @return array                    Response array indicating success or error.
+     */
+    public function move($sourcePath, $destinationPath) {
+        try {
+            // Construct the destination URL
+            $destinationUrl = rtrim($this->URL, '/') . '/remote.php/dav/files/' . urlencode($this->Username) . '/' . ltrim($destinationPath, '/');
+
+            // Define headers
+            $headers = [
+                'Destination: ' . $destinationUrl
+            ];
+
+            // Use the request method to send the MOVE request
+            $response = $this->request('MOVE', $sourcePath, [
+                'headers' => $headers,
+                'type' => 'dav'  // assuming we are working with WebDAV
+            ]);
+
+            // Check for a successful response
+            if ($response['success']) {
+                return [
+                    'success' => true,
+                    'message' => 'Resource moved successfully.'
+                ];
+            } else {
+                return [
+                    'success' => false,
+                    'message' => 'Failed to move resource. HTTP Code: ' . $response['http_code']
+                ];
+            }
+        } catch (Exception $e) {
+            $this->Logger->error(__METHOD__ . ' Error: ' . $e->getMessage());
+            return [
+                'success' => false,
+                'error' => $e->getMessage(),
+            ];
         }
     }
 }
