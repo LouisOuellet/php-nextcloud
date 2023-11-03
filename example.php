@@ -52,13 +52,14 @@ if(isset($upload,$upload['path'])){
 // Share File
 if(isset($upload,$upload['path'])){
     $shareOptions = [
-        // 'permissions' => 3,
+        'permissions' => $phpNextcloud->File->permission('READ'), // READ, UPDATE, CREATE, DELETE, SHARE, ALL
+        'hideDownload' => true // Hide the download option
         // 'password' => '!QAZxsw2321654987',
         // 'expireDate' => '2023-12-31',
         // 'note' => 'This is a note for the share',
     ];
     $share = $phpNextcloud->File->share($upload['path'], $shareOptions);
-    // echo PHP_EOL . "Share File: " . PHP_EOL . json_encode($share, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);exit;
+    echo PHP_EOL . "Share File: " . PHP_EOL . json_encode($share, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);exit;
 }
 
 // Properties of Share

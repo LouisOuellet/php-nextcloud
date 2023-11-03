@@ -11,7 +11,30 @@ use \Exception;
 
 class File extends Base {
 
-	protected $Type = 'files'; // Request Type
+    // Request Type
+	protected $Type = 'files';
+
+    public function permission($level){
+
+        // Set level in caps
+        $level = strtoupper($level);
+
+        // Debug Information
+        $this->Logger->debug(__METHOD__ . ' level: ' . json_encode($level, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+
+        // Permissions
+        $permissions = [
+            'READ' => 1,
+            'UPDATE' => 2,
+            'CREATE' => 4,
+            'DELETE' => 8,
+            'SHARE' => 16,
+            'ALL' => 31
+        ];
+        
+        // Return permission
+        return $permissions[$level];
+    }
 
 	/**
 	 * Upload a file.
@@ -94,16 +117,45 @@ class File extends Base {
 
             // Default values
             $defaults = [
-                'shareType' => 3, // 3 = Share with link
-                'permissions' => 1, // Read-only permission // 1 for read-only, 3 for read & write, and 17 for read & write & reshare
+                'shareType' => 3, // 0 = Share with user, 1 = Share with group, 3 = Share with link, 4 = email, 6 = Federated cloud share, 7 = circle, 10 = Talk chat
+                'permissions' => $this->permission('READ'), // Read-only permission // 1 for read-only, 3 for read & write, and 17 for read & write & reshare
                 'password' => null, // No password
                 'expireDate' => null, // No expiry date
+                'shareWith' => null, // No user or group
                 'note' => null, // No note
+                'publicUpload' => false, // No public upload
+                'hideDownload' => false, // Show download by default
+                'path' => $filePath, // Path to the file
+                'note' => null, // No note
+                'attributes' => [], // JSON empty array
             ];
             
             // Overwrite defaults with any options passed in
-            $fields = array_merge($defaults, ['path' => $filePath], $options);
+            $fields = array_merge($defaults, $options);
 
+            // Remove any fields that are not required
+            foreach ($fields as $key => $value) {
+                if ($value === null) {
+                    unset($fields[$key]);
+                }
+            }
+
+            // Set attributes
+            if($fields['hideDownload']){
+                $fields['attributes'][] = [
+                    'scope' => 'permissions',
+                    'key' => 'download',
+                    'enabled' => false,
+                ];
+            }
+
+            // Convert attributes to json
+            $fields['attributes'] = json_encode($fields['attributes'], JSON_UNESCAPED_SLASHES);
+
+            // Debug Information
+            $this->Logger->debug(__METHOD__ . ' fields: ' . PHP_EOL . json_encode($fields, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+
+            // Send the request
             $result = $this->request('POST', $endpoint, [ 'headers' => ['OCS-APIRequest: true'], 'body' => $fields, 'type' => 'ocs' ]);
 
             if (!$result['success']) {
