@@ -215,7 +215,7 @@ class File extends Base {
                         'Depth: 1',
                         'Content-Type: application/xml; charset=utf-8',
                     ],
-                    'body' => "<?xml version=\"1.0\"?>\r\n<d:propfind xmlns:d=\"DAV:\">\r\n\t<d:allprop/>\r\n</d:propfind>"
+                    'body' => "<?xml version=\"1.0\"?>\r\n<d:propfind xmlns:d=\"DAV:\" xmlns:oc=\"http://owncloud.org/ns\" xmlns:nc=\"http://nextcloud.org/ns\">\r\n<d:prop>\r\n<d:getlastmodified />\r\n<d:getetag />\r\n<d:getcontenttype />\r\n<d:resourcetype />\r\n<oc:fileid />\r\n<oc:permissions />\r\n<oc:size />\r\n<d:getcontentlength />\r\n<nc:has-preview />\r\n<oc:favorite />\r\n<oc:comments-unread />\r\n<oc:owner-display-name />\r\n<oc:share-types />\r\n<nc:contained-folder-count />\r\n<nc:contained-file-count />\r\n</d:prop>\r\n</d:propfind>"
                 ]
             );
 
@@ -236,12 +236,20 @@ class File extends Base {
             if($this->isAssociativeArray($parsedXml['data']['d:response'])){
                 foreach($parsedXml['data']['d:response'] as $response){
                     if(trim($response['d:href'],'/') == $href){
-                        $xmlArray = $response['d:propstat']['d:prop'];
+                        if($this->isAssociativeArray($response['d:propstat'])){
+                            $xmlArray = $response['d:propstat'][0]['d:prop'];
+                        } else {
+                            $xmlArray = $response['d:propstat']['d:prop'];
+                        }
                         break;
                     }
                 }
             } else {
-                $xmlArray = $parsedXml['data']['d:response']['d:propstat']['d:prop'];
+                if($this->isAssociativeArray($parsedXml['data']['d:response']['d:propstat'])){
+                    $xmlArray = $parsedXml['data']['d:response']['d:propstat'][0]['d:prop'];
+                } else {
+                    $xmlArray = $parsedXml['data']['d:response']['d:propstat']['d:prop'];
+                }
             }
     
             // Extracting filename and path
@@ -280,7 +288,7 @@ class File extends Base {
             // Debug Information
             $this->Logger->debug(__METHOD__ . ' Properties: ' . json_encode($Properties, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 
-			return isset($Properties['d:quota-used-bytes'])||isset($Properties['d:quota-available-bytes']);
+			return isset($Properties['nc:contained-folder-count'])||isset($Properties['nc:contained-file-count']);
 		} catch (Exception $e) {
 			$this->Logger->error(__METHOD__ . ' Error: '.$e->getMessage());
 			return ['success' => false, 'error' => $e->getMessage()];

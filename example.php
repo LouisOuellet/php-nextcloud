@@ -13,6 +13,21 @@ $phpNextcloud = new phpNextcloud();
 // Set log level
 $phpNextcloud->config("level",5);
 
+// Test
+$Share = $phpNextcloud->File->getShareProperties('kPAznDpN7AT8aFJ');
+$Files = $phpNextcloud->File->getFiles(trim($Share['path'],'/'));
+echo PHP_EOL . "Properties of Share: " . PHP_EOL . json_encode($Share, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+echo PHP_EOL . "List of Files: " . PHP_EOL . json_encode($Files, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+foreach($Files as $File){
+    if(isset($File['d:getcontentlength'])){
+        $Properties = $phpNextcloud->File->getFileProperties($File['path']);
+        echo PHP_EOL . "Properties of File: " . PHP_EOL . json_encode($Properties, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        echo PHP_EOL . "iframe: " . PHP_EOL . json_encode(str_replace('index.php','index.php/apps/onlyoffice',$Share['url']).'?fileId='.$Properties['oc:fileid'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        echo PHP_EOL . "download: " . PHP_EOL . json_encode($Share['url'].'/download?path='.urlencode('/').'&files='.$Properties['filename'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    }
+}
+exit;
+
 // Create Sample File
 $fileName = "sample.txt";
 $fileBlob = "data:text/plain;base64," . base64_encode("Hello World!");
@@ -59,7 +74,7 @@ if(isset($upload,$upload['path'])){
         // 'note' => 'This is a note for the share',
     ];
     $share = $phpNextcloud->File->share($upload['path'], $shareOptions);
-    echo PHP_EOL . "Share File: " . PHP_EOL . json_encode($share, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);exit;
+    // echo PHP_EOL . "Share File: " . PHP_EOL . json_encode($share, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);exit;
 }
 
 // Properties of Share
@@ -82,7 +97,7 @@ $makeDirectory = $phpNextcloud->File->makeDirectory('uploads/client');
 
 // // List of Files in Directory
 $getFiles = $phpNextcloud->File->getFiles('uploads');
-// echo PHP_EOL . "List of Files: " . PHP_EOL . json_encode($getFiles, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);exit;
+echo PHP_EOL . "List of Files: " . PHP_EOL . json_encode($getFiles, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);exit;
 
 // Properties of a Directory
 $getDirectoryProperties = $phpNextcloud->File->getFileProperties('uploads');
